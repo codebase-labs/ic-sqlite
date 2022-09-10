@@ -1,0 +1,9 @@
+[package]
+name = "ic-sqlite"
+version = "0.1.0"
+edition = "2018"
+authors = ["Paul Young <84700+paulyoung@users.noreply.github.com>"]
+
+[lib]
+path = "src/lib.rs"
+crate-type = ["cdylib", "lib"]
