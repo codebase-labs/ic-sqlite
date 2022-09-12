@@ -2,3 +2,7 @@
 members = [
     "crates/ic-sqlite",
 ]
+
+[patch.crates-io]
+rusqlite = { version = "0.26", git = "https://github.com/rkusa/rusqlite.git", branch = "wasi" }
+libsqlite3-sys = { version = "0.23", git = "https://github.com/rkusa/rusqlite.git", branch = "wasi" }

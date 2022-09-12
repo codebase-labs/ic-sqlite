@@ -33,7 +33,7 @@
           };
 
           # icfs uses #[feature] which can only be used on the nightly release channel.
-          rustWithWasmTarget = pkgs.rust-bin.stable.latest.default.override {
+          rustWithWasmTarget = pkgs.rust-bin.nightly."2022-06-01".default.override {
             targets = [ "wasm32-unknown-unknown" ];
           };
 
@@ -45,8 +45,10 @@
 
           ic-sqlite = craneLib.buildPackage {
             src = ./.;
-            # cargoExtraArgs = "--target wasm32-unknown-unknown";
-            doCheck = true;
+            # doCheck = true;
+            doCheck = false;
+
+            TARGET_CC = "${pkgs.stdenv.cc.nativePrefix}cc";
           };
         in
         {
@@ -54,10 +56,11 @@
             inherit ic-sqlite;
           };
 
-          packages.default = ic-sqlite;
+          defaultPackage = ic-sqlite;
 
           devShell = pkgs.mkShell {
             RUST_SRC_PATH = pkgs.rustPlatform.rustLibSrc;
+            TARGET_CC = "${pkgs.stdenv.cc.nativePrefix}cc";
 
             inputsFrom = builtins.attrValues self.checks;
 
