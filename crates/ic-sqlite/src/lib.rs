@@ -1,27 +1,26 @@
-use std::cell::RefCell;
-use std::ffi::CString;
-use std::os::raw::c_char;
-use std::ptr::NonNull;
-
+use crate::vfs::PagesVfs;
+use icfs::StableMemory;
 use rusqlite::{params_from_iter, OpenFlags, Row, Rows};
 use serde::ser::Serializer;
 use serde::Serialize;
 use serde_json::Value as JsonValue;
 use sqlite_vfs::{register, RegisterError};
-
-pub use crate::vfs::PagesVfs;
+use std::cell::RefCell;
+use std::ffi::CString;
+use std::os::raw::c_char;
+use std::ptr::NonNull;
 
 mod vfs;
 
 // TODO: icfs::stable_memory::WASM_PAGE_SIZE_IN_BYTES;
 
-extern "C" {
-    pub fn page_count() -> u32;
-    pub fn get_page(ix: u32, ptr: *mut u8);
-    pub fn put_page(ix: u32, ptr: *const u8);
-    pub fn del_page(ix: u32);
-    pub fn conn_sleep(ms: u32);
-}
+// extern "C" {
+//     pub fn page_count() -> u32;
+//     pub fn get_page(ix: u32, ptr: *mut u8);
+//     pub fn put_page(ix: u32, ptr: *const u8);
+//     pub fn del_page(ix: u32);
+//     pub fn conn_sleep(ms: u32);
+// }
 
 // TODO: is there any way to provide this method for SQLite, but not export it as part of the WASM
 // module?
@@ -49,7 +48,7 @@ pub struct Connection {
 
 #[no_mangle]
 pub unsafe extern "C" fn conn_new() -> *mut Connection {
-    let is_new = page_count() == 0;
+    let is_new = StableMemory::capacity() == 0;
 
     let conn = rusqlite::Connection::open_with_flags_and_vfs(
         &vfs::DB_NAME,

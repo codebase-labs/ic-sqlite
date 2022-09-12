@@ -1,7 +1,7 @@
 // use ic_cdk::api::stable;
-// use icfs::StableMemory;
+use icfs::StableMemory;
 use std::convert::TryInto;
-use std::io::{self, ErrorKind};
+use std::io::{self, ErrorKind, Read, Seek, SeekFrom, Write};
 use std::sync::{Arc, Mutex};
 use std::time::Duration;
 
@@ -9,6 +9,11 @@ use sqlite_vfs::{LockKind, OpenKind, OpenOptions, Vfs};
 
 pub const DB_NAME: &str = "main.db";
 pub const VFS_NAME: &str = "ic-sqlite";
+
+thread_local! {
+    static STABLE_MEMORY: std::cell::RefCell<StableMemory>
+        = std::cell::RefCell::new(StableMemory::default());
+}
 
 #[derive(Default)]
 pub struct PagesVfs<const PAGE_SIZE: usize> {
@@ -69,6 +74,10 @@ impl<const PAGE_SIZE: usize> Vfs for PagesVfs<PAGE_SIZE> {
     fn random(&self, buffer: &mut [i8]) {
         // Calling `raw_rand` would be preferable, but this method can't be async.
         // let raw_rand: Vec<u8> = call(Principal::management_canister(), "raw_rand", ()).await;
+        //
+        // We can't write and register a custom getrandom function either because that can't be async:
+        // * https://github.com/rust-random/rand/blob/b73640705d6714509f8ceccc49e8df996fa19f51/README.md#wasm-support
+        // * https://docs.rs/getrandom/0.2.7/getrandom/macro.register_custom_getrandom.html
         todo!();
         // rand::Rng::fill(&mut rand::thread_rng(), buffer);
     }
@@ -187,27 +196,39 @@ impl<const PAGE_SIZE: usize> sqlite_vfs::DatabaseHandle for Connection<PAGE_SIZE
     }
 }
 
+fn put_page<const PAGE_SIZE: usize>(ix: u32, data: &[u8; PAGE_SIZE]) {
+    STABLE_MEMORY.with(|stable_memory| {
+        let mut stable_memory = *stable_memory.borrow();
+        let page_size: u64 = PAGE_SIZE.try_into().unwrap();
+        let offset: u64 = ix as u64 * page_size;
+        stable_memory.seek(SeekFrom::Start(offset)).unwrap();
+        stable_memory.write(data).unwrap();
+    })
+}
+
 impl<const PAGE_SIZE: usize> Connection<PAGE_SIZE> {
     fn get_page(ix: u32) -> [u8; PAGE_SIZE] {
-        let mut data = [0u8; PAGE_SIZE];
-        unsafe { crate::get_page(ix, data.as_mut_ptr()) };
-        data
+        STABLE_MEMORY.with(|stable_memory| {
+            let mut stable_memory = *stable_memory.borrow();
+            let mut data = [0u8; PAGE_SIZE];
+            let page_size: u64 = PAGE_SIZE.try_into().unwrap();
+            let offset: u64 = ix as u64 * page_size;
+            stable_memory.seek(SeekFrom::Start(offset)).unwrap();
+            stable_memory.read(&mut data).unwrap();
+            data
+        })
     }
 
     fn put_page(ix: u32, data: &[u8; PAGE_SIZE]) {
-        unsafe {
-            crate::put_page(ix, data.as_ptr());
-        }
+        put_page(ix, data)
     }
 
     fn del_page(ix: u32) {
-        unsafe {
-            crate::del_page(ix);
-        }
+        put_page(ix, &[0; PAGE_SIZE])
     }
 
     fn page_count() -> usize {
-        unsafe { crate::page_count() as usize }
+        StableMemory::size().try_into().unwrap()
     }
 
     fn lock(&mut self, to: LockKind) -> bool {
