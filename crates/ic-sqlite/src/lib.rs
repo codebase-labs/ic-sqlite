@@ -12,7 +12,8 @@ use std::ptr::NonNull;
 
 mod vfs;
 
-// TODO: icfs::stable_memory::WASM_PAGE_SIZE_IN_BYTES;
+// TODO: reuse icfs::stable_memory::WASM_PAGE_SIZE_IN_BYTES;
+const WASM_PAGE_SIZE_IN_BYTES: usize = 64 * 1024; // 64KB
 
 // extern "C" {
 //     pub fn page_count() -> u32;
@@ -34,7 +35,7 @@ extern "C" fn sqlite3_os_init() -> i32 {
         .try_init()
         .ok();
 
-    match register(&vfs::VFS_NAME, PagesVfs::<4096>::default(), true) {
+    match register(&vfs::VFS_NAME, PagesVfs::<WASM_PAGE_SIZE_IN_BYTES>::default(), true) {
         Ok(_) => SQLITE_OK,
         Err(RegisterError::Nul(_)) => SQLITE_ERROR,
         Err(RegisterError::Register(code)) => code,
@@ -60,8 +61,8 @@ pub unsafe extern "C" fn conn_new() -> *mut Connection {
     .expect("open connection");
 
     if is_new {
-        conn.execute("PRAGMA page_size = 4096;", [])
-            .expect("set page_size = 4096");
+        conn.execute(&format!("PRAGMA page_size = {};", WASM_PAGE_SIZE_IN_BYTES), [])
+            .expect(&format!("set page_size = {}", WASM_PAGE_SIZE_IN_BYTES));
         let journal_mode: String = conn
             .query_row("PRAGMA journal_mode = MEMORY", [], |row| row.get(0))
             .expect("set journal_mode = MEMORY");
