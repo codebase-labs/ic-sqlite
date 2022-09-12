@@ -57,6 +57,8 @@
           packages.default = ic-sqlite;
 
           devShell = pkgs.mkShell {
+            RUST_SRC_PATH = pkgs.rustPlatform.rustLibSrc;
+
             inputsFrom = builtins.attrValues self.checks;
 
             nativeBuildInputs = with pkgs; [
