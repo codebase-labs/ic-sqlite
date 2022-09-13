@@ -250,17 +250,14 @@ impl<const PAGE_SIZE: usize> Connection<PAGE_SIZE> {
     fn put_page(ix: u32, data: &[u8; PAGE_SIZE]) {
         put_page(ix, data);
         let page_count = get_page_count();
-
-        if page_count <= ix {
-            set_page_count(ix + 1);
-        }
+        set_page_count(std::cmp::max(page_count, ix + 1));
     }
 
     fn del_page(ix: u32) {
         put_page(ix, &[0u8; PAGE_SIZE]);
         let page_count = get_page_count();
 
-        if page_count <= ix + 1 {
+        if ix + 1 >= page_count {
             set_page_count(ix);
         }
     }
