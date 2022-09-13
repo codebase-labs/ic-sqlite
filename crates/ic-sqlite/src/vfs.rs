@@ -196,11 +196,26 @@ impl<const PAGE_SIZE: usize> sqlite_vfs::DatabaseHandle for Connection<PAGE_SIZE
     }
 }
 
+fn get_offset_from_ix<const PAGE_SIZE: usize>(ix: u32) -> u64 {
+    let page_size: u64 = PAGE_SIZE.try_into().unwrap();
+    ix as u64 * page_size
+}
+
+fn get_page<const PAGE_SIZE: usize>(ix: u32) -> [u8; PAGE_SIZE] {
+    STABLE_MEMORY.with(|stable_memory| {
+        let mut stable_memory = *stable_memory.borrow();
+        let mut data = [0u8; PAGE_SIZE];
+        let offset = get_offset_from_ix::<PAGE_SIZE>(ix);
+        stable_memory.seek(SeekFrom::Start(offset)).unwrap();
+        stable_memory.read(&mut data).unwrap();
+        data
+    })
+}
+
 fn put_page<const PAGE_SIZE: usize>(ix: u32, data: &[u8; PAGE_SIZE]) {
     STABLE_MEMORY.with(|stable_memory| {
         let mut stable_memory = *stable_memory.borrow();
-        let page_size: u64 = PAGE_SIZE.try_into().unwrap();
-        let offset: u64 = ix as u64 * page_size;
+        let offset = get_offset_from_ix::<PAGE_SIZE>(ix);
         stable_memory.seek(SeekFrom::Start(offset)).unwrap();
         stable_memory.write(data).unwrap();
     })
@@ -208,15 +223,7 @@ fn put_page<const PAGE_SIZE: usize>(ix: u32, data: &[u8; PAGE_SIZE]) {
 
 impl<const PAGE_SIZE: usize> Connection<PAGE_SIZE> {
     fn get_page(ix: u32) -> [u8; PAGE_SIZE] {
-        STABLE_MEMORY.with(|stable_memory| {
-            let mut stable_memory = *stable_memory.borrow();
-            let mut data = [0u8; PAGE_SIZE];
-            let page_size: u64 = PAGE_SIZE.try_into().unwrap();
-            let offset: u64 = ix as u64 * page_size;
-            stable_memory.seek(SeekFrom::Start(offset)).unwrap();
-            stable_memory.read(&mut data).unwrap();
-            data
-        })
+        get_page(ix)
     }
 
     fn put_page(ix: u32, data: &[u8; PAGE_SIZE]) {
