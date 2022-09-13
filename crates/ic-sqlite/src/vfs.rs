@@ -9,6 +9,7 @@ use sqlite_vfs::{LockKind, OpenKind, OpenOptions, Vfs};
 
 pub const DB_NAME: &str = "main.db";
 pub const VFS_NAME: &str = "ic-sqlite";
+pub const HEADER_SIZE_IN_BYTES: usize = 32;
 
 thread_local! {
     static STABLE_MEMORY: std::cell::RefCell<StableMemory>
@@ -196,9 +197,29 @@ impl<const PAGE_SIZE: usize> sqlite_vfs::DatabaseHandle for Connection<PAGE_SIZE
     }
 }
 
+fn get_page_count() -> u32 {
+    STABLE_MEMORY.with(|stable_memory| {
+        let mut stable_memory = *stable_memory.borrow();
+        let mut data = [0u8; 4];
+        stable_memory.seek(SeekFrom::Start(0)).unwrap();
+        stable_memory.read(&mut data).unwrap();
+        u32::from_le_bytes(data)
+    })
+}
+
+fn set_page_count(page_count: u32) {
+    STABLE_MEMORY.with(|stable_memory| {
+        let mut stable_memory = *stable_memory.borrow();
+        let data = page_count.to_le_bytes();
+        stable_memory.seek(SeekFrom::Start(0)).unwrap();
+        stable_memory.write(&data).unwrap();
+    })
+}
+
 fn get_offset_from_ix<const PAGE_SIZE: usize>(ix: u32) -> u64 {
+    let header_size: u64 = HEADER_SIZE_IN_BYTES.try_into().unwrap();
     let page_size: u64 = PAGE_SIZE.try_into().unwrap();
-    ix as u64 * page_size
+    header_size + ix as u64 * page_size
 }
 
 fn get_page<const PAGE_SIZE: usize>(ix: u32) -> [u8; PAGE_SIZE] {
@@ -227,15 +248,25 @@ impl<const PAGE_SIZE: usize> Connection<PAGE_SIZE> {
     }
 
     fn put_page(ix: u32, data: &[u8; PAGE_SIZE]) {
-        put_page(ix, data)
+        put_page(ix, data);
+        let page_count = get_page_count();
+
+        if page_count <= ix {
+            set_page_count(ix + 1);
+        }
     }
 
     fn del_page(ix: u32) {
-        put_page(ix, &[0; PAGE_SIZE])
+        put_page(ix, &[0u8; PAGE_SIZE]);
+        let page_count = get_page_count();
+
+        if page_count <= ix + 1 {
+            set_page_count(ix);
+        }
     }
 
     fn page_count() -> usize {
-        StableMemory::size().try_into().unwrap()
+        get_page_count().try_into().unwrap()
     }
 
     fn lock(&mut self, to: LockKind) -> bool {

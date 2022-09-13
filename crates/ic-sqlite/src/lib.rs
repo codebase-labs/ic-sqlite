@@ -14,6 +14,7 @@ mod vfs;
 
 // TODO: reuse icfs::stable_memory::WASM_PAGE_SIZE_IN_BYTES;
 const WASM_PAGE_SIZE_IN_BYTES: usize = 64 * 1024; // 64KB
+const PAGE_SIZE_IN_BYTES: usize = WASM_PAGE_SIZE_IN_BYTES - vfs::HEADER_SIZE_IN_BYTES;
 
 // extern "C" {
 //     pub fn page_count() -> u32;
@@ -35,7 +36,7 @@ extern "C" fn sqlite3_os_init() -> i32 {
         .try_init()
         .ok();
 
-    match register(&vfs::VFS_NAME, PagesVfs::<WASM_PAGE_SIZE_IN_BYTES>::default(), true) {
+    match register(&vfs::VFS_NAME, PagesVfs::<PAGE_SIZE_IN_BYTES>::default(), true) {
         Ok(_) => SQLITE_OK,
         Err(RegisterError::Nul(_)) => SQLITE_ERROR,
         Err(RegisterError::Register(code)) => code,
