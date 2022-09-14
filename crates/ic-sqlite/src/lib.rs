@@ -1,3 +1,5 @@
+#![deny(rust_2018_idioms)]
+
 use crate::vfs::PagesVfs;
 use icfs::StableMemory;
 use rusqlite::{params_from_iter, OpenFlags, Row, Rows};
@@ -10,7 +12,7 @@ use std::ffi::CString;
 use std::os::raw::c_char;
 use std::ptr::NonNull;
 
-mod vfs;
+pub mod vfs;
 
 // TODO: reuse icfs::stable_memory::WASM_PAGE_SIZE_IN_BYTES;
 const WASM_PAGE_SIZE_IN_BYTES: usize = 64 * 1024; // 64KB
@@ -27,7 +29,7 @@ const PAGE_SIZE_IN_BYTES: usize = WASM_PAGE_SIZE_IN_BYTES - vfs::HEADER_SIZE_IN_
 // TODO: is there any way to provide this method for SQLite, but not export it as part of the WASM
 // module?
 #[no_mangle]
-extern "C" fn sqlite3_os_init() -> i32 {
+pub extern "C" fn sqlite3_os_init() -> i32 {
     const SQLITE_OK: i32 = 0;
     const SQLITE_ERROR: i32 = 1;
 

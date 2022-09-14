@@ -1,6 +1,7 @@
 [workspace]
 members = [
     "crates/ic-sqlite",
+    "examples/ic-sqlite",
 ]
 
 [patch.crates-io]

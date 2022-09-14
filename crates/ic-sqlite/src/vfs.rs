@@ -1,5 +1,8 @@
 // use ic_cdk::api::stable;
+use core::slice;
 use icfs::StableMemory;
+use rand_chacha::ChaCha20Rng;
+use rand_core::RngCore;
 use std::convert::TryInto;
 use std::io::{self, ErrorKind, Read, Seek, SeekFrom, Write};
 use std::sync::{Arc, Mutex};
@@ -12,7 +15,10 @@ pub const VFS_NAME: &str = "ic-sqlite";
 pub const HEADER_SIZE_IN_BYTES: usize = 32;
 
 thread_local! {
-    static STABLE_MEMORY: std::cell::RefCell<StableMemory>
+    // TODO: can we make this rand_core::RngCore?
+    pub static RNG: std::cell::RefCell<Option<ChaCha20Rng>>
+        = std::cell::RefCell::new(None);
+    pub static STABLE_MEMORY: std::cell::RefCell<StableMemory>
         = std::cell::RefCell::new(StableMemory::default());
 }
 
@@ -73,14 +79,11 @@ impl<const PAGE_SIZE: usize> Vfs for PagesVfs<PAGE_SIZE> {
     }
 
     fn random(&self, buffer: &mut [i8]) {
-        // Calling `raw_rand` would be preferable, but this method can't be async.
-        // let raw_rand: Vec<u8> = call(Principal::management_canister(), "raw_rand", ()).await;
-        //
-        // We can't write and register a custom getrandom function either because that can't be async:
-        // * https://github.com/rust-random/rand/blob/b73640705d6714509f8ceccc49e8df996fa19f51/README.md#wasm-support
-        // * https://docs.rs/getrandom/0.2.7/getrandom/macro.register_custom_getrandom.html
-        todo!();
-        // rand::Rng::fill(&mut rand::thread_rng(), buffer);
+        RNG.with(|rng_ref| {
+            let buf: &mut [u8] =
+                unsafe { slice::from_raw_parts_mut(buffer.as_ptr() as *mut u8, buffer.len()) };
+            rng_ref.borrow_mut().as_mut().unwrap().fill_bytes(buf)
+        })
     }
 
     fn sleep(&self, _duration: Duration) -> Duration {

@@ -22,6 +22,23 @@
         "type": "github"
       }
     },
+    "dfinity-sdk": {
+      "flake": false,
+      "locked": {
+        "lastModified": 1648113953,
+        "narHash": "sha256-IklA+lDgK67wovqsFLaPpRms8NiI6MGC5c+lZKvPXIs=",
+        "owner": "paulyoung",
+        "repo": "nixpkgs-dfinity-sdk",
+        "rev": "28bb54dc1912cd723dc15f427b67c5309cfe851e",
+        "type": "github"
+      },
+      "original": {
+        "owner": "paulyoung",
+        "repo": "nixpkgs-dfinity-sdk",
+        "rev": "28bb54dc1912cd723dc15f427b67c5309cfe851e",
+        "type": "github"
+      }
+    },
     "flake-compat": {
       "flake": false,
       "locked": {
@@ -87,6 +104,7 @@
     "root": {
       "inputs": {
         "crane": "crane",
+        "dfinity-sdk": "dfinity-sdk",
         "flake-utils": "flake-utils_2",
         "nixpkgs": "nixpkgs",
         "rust-overlay": "rust-overlay"
