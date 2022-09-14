@@ -5,5 +5,5 @@ members = [
 ]
 
 [patch.crates-io]
-rusqlite = { version = "0.26", git = "https://github.com/rkusa/rusqlite.git", branch = "wasi" }
-libsqlite3-sys = { version = "0.23", git = "https://github.com/rkusa/rusqlite.git", branch = "wasi" }
+rusqlite = { version = "0.26", git = "https://github.com/trevyn/rusqlite.git", branch = "wasm32-unknown-unknown" }
+libsqlite3-sys = { version = "0.23", git = "https://github.com/trevyn/rusqlite.git", branch = "wasm32-unknown-unknown" }
