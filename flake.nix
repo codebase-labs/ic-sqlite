@@ -14,6 +14,11 @@
 
     flake-utils.url = "github:numtide/flake-utils";
 
+    naersk = {
+      url = "github:nix-community/naersk";
+      inputs.nixpkgs.follows = "nixpkgs";
+    };
+
     rust-overlay = {
       url = "github:oxalica/rust-overlay";
       inputs = {
@@ -23,7 +28,7 @@
     };
   };
 
-  outputs = { self, nixpkgs, crane, dfinity-sdk, flake-utils, rust-overlay, ... }:
+  outputs = { self, nixpkgs, crane, dfinity-sdk, flake-utils, naersk, rust-overlay, ... }:
     let
       supportedSystems = [
         flake-utils.lib.system.aarch64-darwin
@@ -45,11 +50,18 @@
             targets = [ "wasm32-unknown-unknown" ];
           };
 
+          naerskLib = naersk.lib."${system}".override {
+            cargo = rustWithWasmTarget;
+            rustc = rustWithWasmTarget;
+          };
+
           # NB: we don't need to overlay our custom toolchain for the *entire*
           # pkgs (which would require rebuidling anything else which uses rust).
           # Instead, we just want to update the scope that crane will use by appending
           # our specific toolchain there.
           craneLib = (crane.mkLib pkgs).overrideToolchain rustWithWasmTarget;
+
+          stdenv = pkgs.llvmPackages_14.stdenv;
 
           dfinitySdk = (pkgs.dfinity-sdk {
             acceptLicenseAgreement = true;
@@ -63,42 +75,73 @@
             version = "0.12.0-beta.1";
           };
 
-          buildRustPackage = options: craneLib.buildPackage ({
+          buildRustPackage = options: naerskLib.buildPackage rec {
+            inherit (options) pname;
+            inherit stdenv;
+            TARGET_CC = "${pkgs.stdenv.cc.nativePrefix}cc";
+            root = ./.;
+            CC = "${stdenv.cc.nativePrefix}cc";
+            AR = "${stdenv.cc.nativePrefix}ar";
+            cargoBuildOptions = x: x ++ [
+              "--package" pname
+              "--target" "wasm32-unknown-unknown"
+            ];
+            doCheck = false;
+            cargoTestOptions = x: x ++ [
+              "--package" pname
+              # "--target" "aarch64-apple-darwin"
+            ];
+            compressTarget = false;
+            copyBins = false;
+            copyTarget = true;
+            # postInstall = ''
+            # '';
+          };
+
+          _buildRustPackage = options: craneLib.buildPackage rec {
+            inherit (options) pname;
+            inherit stdenv;
             TARGET_CC = "${pkgs.stdenv.cc.nativePrefix}cc";
             src = ./.;
+            cargoExtraArgs = "--package ${pname}";
             # crane tries to run the Wasm file as if it were a binary
             doCheck = false;
-          } // options);
 
-          ic-sqlite = buildRustPackage {
-            cargoExtraArgs = "--package ic-sqlite";
+            CC = "${stdenv.cc.nativePrefix}cc";
+            AR = "${stdenv.cc.nativePrefix}ar";
           };
 
-          ic-sqlite-example = buildRustPackage {
-            cargoExtraArgs = "--package ic-sqlite-example";
+          ic-sqlite = buildRustPackage rec {
+            pname = "ic-sqlite";
+          };
+
+          ic-sqlite-example = buildRustPackage rec {
+            pname = "ic-sqlite-example";
           };
         in
-        {
-          checks = {
-            inherit ic-sqlite ic-sqlite-example;
-          };
+          {
+            checks = {
+              inherit ic-sqlite ic-sqlite-example;
+            };
 
-          packages = {
-            inherit ic-sqlite ic-sqlite-example;
-          };
+            packages = {
+              inherit ic-sqlite ic-sqlite-example;
+            };
 
-          defaultPackage = ic-sqlite-example;
+            defaultPackage = ic-sqlite-example;
 
-          devShell = pkgs.mkShell {
-            RUST_SRC_PATH = pkgs.rustPlatform.rustLibSrc;
-            TARGET_CC = "${pkgs.stdenv.cc.nativePrefix}cc";
+            devShell = pkgs.mkShell {
+              RUST_SRC_PATH = pkgs.rustPlatform.rustLibSrc;
+              CC = "${stdenv.cc.nativePrefix}cc";
+              AR = "${stdenv.cc.nativePrefix}ar";
 
-            inputsFrom = builtins.attrValues self.checks;
+              inputsFrom = builtins.attrValues self.checks;
 
-            nativeBuildInputs = with pkgs; [
-              dfinitySdk
-              rustWithWasmTarget
-            ];
-          };
-        });
+              nativeBuildInputs = with pkgs; [
+                dfinitySdk
+                rustWithWasmTarget
+              ];
+            };
+          }
+      );
 }
